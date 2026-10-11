@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
 /// Application identifier, also the directory name under the OS data directory.
-pub const APP_ID: &str = "com.localnotes.app";
+pub const APP_ID: &str = "com.notedown.app";
 
 /// Where the database and attachment directory live, per operating system:
 ///
 /// | OS      | Directory                                                       |
 /// |---------|-----------------------------------------------------------------|
-/// | Linux   | `$XDG_DATA_HOME/com.localnotes.app` or `~/.local/share/…`        |
-/// | Windows | `%APPDATA%\com.localnotes.app`                                   |
-/// | macOS   | `~/Library/Application Support/com.localnotes.app`               |
+/// | Linux   | `$XDG_DATA_HOME/com.notedown.app` or `~/.local/share/…`        |
+/// | Windows | `%APPDATA%\com.notedown.app`                                   |
+/// | macOS   | `~/Library/Application Support/com.notedown.app`               |
 ///
 /// Documented in `docs/DATA-LOCATIONS.md`; the same table appears in the README
 /// so a user can find (and back up) their notes without the app.

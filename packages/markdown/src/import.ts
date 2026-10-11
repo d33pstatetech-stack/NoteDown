@@ -160,7 +160,10 @@ export async function importArchive(
       mime,
       ext,
       size: bytes.length,
-      sha256: fromMetadata?.sha256 ?? (await sha256Hex(bytes)),
+      // Always hashed from the bytes. The sidecar's digest is only a claim: an
+      // archive is untrusted input, and storing an unverified digest would make
+      // every later conflict decision on this attachment wrong.
+      sha256: await sha256Hex(bytes),
       createdAt: now().toISOString(),
       syncState: "local-only",
       baseVersion: 0,

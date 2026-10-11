@@ -10,6 +10,11 @@ export default [
       "**/coverage/**",
       "crates/**/target/**",
       "apps/desktop/src-tauri/target/**",
+      // Locally-running Worker state and the bundled workerd output it produces.
+      // Generated, machine-written, and never source: linting it only reports
+      // plugin rules that do not exist for emitted code.
+      "**/.wrangler/**",
+      "**/target-e2e/**",
       "**/*.config.js",
     ],
   },

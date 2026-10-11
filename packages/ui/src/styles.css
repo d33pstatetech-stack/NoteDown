@@ -576,6 +576,20 @@ body {
   align-items: center;
 }
 
+/* The sync label carries tone as well as words, so the state is not conveyed by
+   colour alone — the text always says what is happening. */
+[data-testid="sync-status"] {
+  font-weight: 600;
+}
+
+[data-testid="sync-status"][data-tone="warn"] {
+  color: var(--ln-text-muted);
+}
+
+[data-testid="sync-status"][data-tone="error"] {
+  color: var(--ln-danger);
+}
+
 .ln-save-indicator.state-dirty,
 .ln-save-indicator.state-saving {
   color: var(--ln-accent);
@@ -611,6 +625,42 @@ body {
   padding: 1rem 1.15rem 1.15rem;
 }
 
+/* Sign-in needs room for labelled fields and a split action row. */
+.ln-dialog-wide {
+  width: min(440px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.ln-field {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.ln-field > span {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--ln-text-muted);
+}
+
+.ln-field input {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--ln-border);
+  border-radius: var(--ln-radius);
+  background: var(--ln-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.ln-field small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ln-text-muted);
+  font-size: 0.75rem;
+}
+
 .ln-dialog h2 {
   margin: 0 0 0.5rem;
   font-size: 1.05rem;
@@ -636,6 +686,17 @@ body {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+}
+
+/* Pushes the secondary link to the left of the action row. */
+.ln-dialog-actions-split {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.ln-dialog-actions-split > .ln-dialog-actions {
+  margin: 0;
 }
 
 .ln-notices {

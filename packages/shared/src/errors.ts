@@ -11,6 +11,7 @@ export type AppErrorCode =
   | "forbidden"
   | "quota_exceeded"
   | "import_invalid"
+  | "stale_checkpoint"
   | "unsupported";
 
 export interface AppErrorOptions {
@@ -127,6 +128,17 @@ export class QuotaExceededError extends AppError {
 export class ImportError extends AppError {
   constructor(message: string, details?: Record<string, unknown>) {
     super("import_invalid", message, details ? { details } : {});
+  }
+}
+
+/**
+ * The server cannot serve an incremental feed for this cursor because the
+ * device was offline past the tombstone horizon. Not transient: it needs a full
+ * resync, which the sync engine performs by clearing the checkpoint.
+ */
+export class StaleCheckpointError extends AppError {
+  constructor(message = "This device has been offline too long; a full resync is required") {
+    super("stale_checkpoint", message);
   }
 }
 

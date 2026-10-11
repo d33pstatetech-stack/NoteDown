@@ -2,14 +2,9 @@ import type { ReactNode } from "react";
 import type { StorageInfo } from "@localnotes/shared";
 import type { SaveState } from "../app/workspace";
 import type { ThemeMode } from "../app/theme";
+import type { SyncController } from "../app/sync-controller";
 
-export interface SyncStatus {
-  state: "disabled" | "idle" | "syncing" | "offline" | "error";
-  pending: number;
-  lastSyncedAt: string | null;
-  error: string | null;
-  onRetry?: () => void;
-}
+export type SyncStatus = SyncController;
 
 export interface StatusBarProps {
   saveState: SaveState;
@@ -39,23 +34,48 @@ function saveLabel(saveState: SaveState, lastSavedAt: string | null): string {
   }
 }
 
+/**
+ * The one place the sync state is turned into words. Every branch states what is
+ * true about the user's data — local safety first, cloud second — because this
+ * is the only feedback a user gets about whether their work reached the server.
+ */
+export function describeSync(sync: SyncStatus): { label: string; tone: "ok" | "warn" | "error" } {
+  if (sync.unavailable) {
+    return { label: "Local only — sign in to sync", tone: "warn" };
+  }
+  if (sync.authState === "checking") return { label: "Checking account…", tone: "warn" };
+  if (sync.authState === "signed-out") return { label: "Local only — sign in to sync", tone: "warn" };
+
+  const { state, pending } = sync.status;
+  switch (state) {
+    case "syncing":
+      return { label: "Syncing…", tone: "ok" };
+    case "offline":
+      return {
+        label: pending > 0 ? `Offline — ${pending} change(s) queued` : "Offline — all changes saved here",
+        tone: "warn",
+      };
+    case "error":
+      return { label: `Sync error — ${pending} change(s) queued`, tone: "error" };
+    case "disabled":
+      return { label: "Local only — sign in to sync", tone: "warn" };
+    default:
+      if (sync.status.conflicts > 0) {
+        return { label: `Synced — ${sync.status.conflicts} conflict copy/copies to review`, tone: "warn" };
+      }
+      return pending > 0 ? { label: `${pending} change(s) to sync`, tone: "warn" } : { label: "Synced", tone: "ok" };
+  }
+}
+
 export function StatusBar(props: StatusBarProps): ReactNode {
-  const { storage } = props;
+  const { storage, sync } = props;
   const storageLabel = storage
     ? `${storage.backend}${storage.persistent === false ? " (best-effort, may be evicted)" : ""}`
     : "…";
-  const syncLabel =
-    props.sync.state === "disabled"
-      ? "Cloud sync not configured (local only)"
-      : props.sync.state === "syncing"
-        ? "Syncing…"
-        : props.sync.state === "offline"
-          ? `Offline — ${props.sync.pending} change(s) queued`
-          : props.sync.state === "error"
-            ? `Sync error — ${props.sync.pending} change(s) queued`
-            : props.sync.pending > 0
-              ? `${props.sync.pending} change(s) to sync`
-              : "Synced";
+  const { label: syncLabel, tone: syncTone } = describeSync(sync);
+  const signedIn = sync.authState === "signed-in" && !sync.unavailable;
+  const canSyncNow =
+    signedIn && (sync.status.state === "idle" || sync.status.state === "error" || sync.status.state === "offline");
 
   return (
     <footer className="ln-status">
@@ -74,10 +94,30 @@ export function StatusBar(props: StatusBarProps): ReactNode {
       </div>
 
       <div className="ln-status-group">
-        <span data-testid="sync-status">{syncLabel}</span>
-        {props.sync.onRetry && props.sync.state === "error" ? (
-          <button type="button" className="ln-link" onClick={props.sync.onRetry}>
-            Retry
+        <span data-testid="sync-status" data-tone={syncTone}>
+          {syncLabel}
+        </span>
+        {signedIn ? (
+          <button
+            type="button"
+            className="ln-link"
+            onClick={() => void sync.syncNow()}
+            disabled={!canSyncNow}
+          >
+            Sync now
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="ln-link"
+            onClick={() => document.dispatchEvent(new CustomEvent("localnotes:sign-in"))}
+          >
+            Sign in
+          </button>
+        )}
+        {signedIn ? (
+          <button type="button" className="ln-link" onClick={() => void sync.signOut()}>
+            Sign out
           </button>
         ) : null}
         <span className="ln-sep" aria-hidden="true">

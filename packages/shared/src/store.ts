@@ -458,6 +458,12 @@ export class Store {
    * Coalesces at most one op per entity. When a replaced op had already been
    * sent, its content hash is carried into `pushedHashes` so a later 409 can be
    * recognised as "my own earlier write" (rebase) instead of a real conflict.
+   *
+   * The idempotency key is deliberately re-minted whenever the payload changes.
+   * The server records every `opId` it has seen and answers `duplicate` to a
+   * replay, so keeping the old key after the payload changed would make the
+   * server silently drop the newer edit — the user's text would be acked as
+   * "already applied" and never reach any other device.
    */
   private async enqueue(op: EnqueueInput): Promise<QueuedOp> {
     const existingIndex = this.queue.findIndex(
@@ -465,16 +471,18 @@ export class Store {
     );
     const existing = existingIndex === -1 ? null : (this.queue[existingIndex] as QueuedOp);
     const carried: string[] = op.pushedHashes ? [...op.pushedHashes] : [];
+    let payloadChanged = false;
     if (existing) {
       carried.push(...existing.pushedHashes);
       const hash = opPayloadHash(existing);
       // Only a hash we actually handed to the transport can come back to us.
       if (existing.attempts > 0 && hash) carried.push(hash);
+      payloadChanged = opRequestFingerprint(existing) !== opRequestFingerprint(op);
     }
 
     const queued = {
       ...op,
-      opId: existing?.opId ?? this.createId(),
+      opId: existing && !payloadChanged ? existing.opId : this.createId(),
       pushedHashes: dedupe(carried),
       attempts: 0,
       lastError: null,
@@ -485,7 +493,10 @@ export class Store {
     const isNew = existingIndex === -1;
     if (isNew) this.queue.push(queued);
     else this.queue[existingIndex] = queued;
-    await this.backend.writeOps([queued], []);
+    // When the idempotency key was re-minted the previous row would otherwise
+    // linger in the backend and reappear on the next reload.
+    const stale = existing && existing.opId !== queued.opId ? [existing.opId] : [];
+    await this.backend.writeOps([queued], stale);
     return queued;
   }
 
@@ -983,10 +994,33 @@ function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-function opPayloadHash(op: QueuedOp | null): string | null {
+/**
+ * Picks `type`/`payload` off a queued op while preserving the discriminated
+ * union. A plain `Pick<QueuedOp, "type" | "payload">` collapses the union into
+ * `{ type: A|B|C; payload: A|B|C }`, which destroys the narrowing that lets the
+ * compiler check each op's payload against its own type.
+ */
+type OpShape = QueuedOp extends infer T
+  ? T extends QueuedOp
+    ? Pick<T, "type" | "payload">
+    : never
+  : never;
+
+function opPayloadHash(op: OpShape | null): string | null {
   if (!op) return null;
   if (op.type === "upsert_node") return op.payload.contentHash;
   return null;
+}
+
+/**
+ * Identity of an op's *request*, used only to decide whether a coalesced op
+ * still describes the same thing. `contentHash` alone is not enough: a rename or
+ * a move changes the payload without changing the content hash, and replaying
+ * such an op under its old idempotency key would make the server answer
+ * `duplicate` and drop it.
+ */
+function opRequestFingerprint(op: OpShape): string {
+  return JSON.stringify([op.type, op.payload]);
 }
 
 /** Stable topological order: a parent is always imported before its children. */

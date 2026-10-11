@@ -1,10 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "include": [
+    "../../types/globals.d.ts",
     "src",
     "../../types/test-env.d.ts"
   ],
   "compilerOptions": {
+    // Deliberately no `DOM`. This package is compiled for the browser, Node and
+    // Workers from one source; pulling in `lib.dom` would let browser-only APIs
+    // (FileReader, window, …) leak into code that also runs in a Worker. The few
+    // host globals it genuinely needs are declared in `types/globals.d.ts` and
+    // accessed through the narrow views in `src/platform.ts`.
     "lib": [
       "ES2022"
     ]

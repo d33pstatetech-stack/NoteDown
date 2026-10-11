@@ -20,10 +20,10 @@
     "dev:web": "pnpm --filter @localnotes/web run dev",
     "dev:desktop": "pnpm --filter @localnotes/desktop run dev",
     "typecheck:rust": "cargo check --manifest-path crates/notes-store/Cargo.toml",
-    "typecheck:root": "tsc --noEmit -p tsconfig.json"
+    "typecheck:root": "tsc --noEmit -p tsconfig.json",
+    "test:e2e": "bash scripts/e2e.sh"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.12.21",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
@@ -34,7 +34,7 @@
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "fake-indexeddb": "^6.0.0",
@@ -44,6 +44,6 @@
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.11"
   }
 }

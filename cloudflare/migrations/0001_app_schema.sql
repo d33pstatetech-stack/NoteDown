@@ -77,7 +77,13 @@ CREATE TABLE IF NOT EXISTS attachments (
   server_version     INTEGER NOT NULL,
   created_at         TEXT    NOT NULL,
   PRIMARY KEY (user_id, id),
-  FOREIGN KEY (user_id, note_id) REFERENCES nodes (user_id, id) ON DELETE SET NULL
+  -- Scoped to the owner so an attachment can never reference another account's
+  -- note. `ON DELETE CASCADE` rather than `SET NULL`: the referencing key is the
+  -- pair (user_id, note_id), and SET NULL would try to null `user_id` too,
+  -- which is NOT NULL and would make the statement fail instead of clearing the
+  -- link. CASCADE is also the correct behaviour — a node only leaves the table
+  -- with its whole subtree, and those attachments go with it.
+  FOREIGN KEY (user_id, note_id) REFERENCES nodes (user_id, id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_attachments_user_version ON attachments (user_id, server_version);

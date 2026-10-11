@@ -1,3 +1,4 @@
+import { LIMITS, sha256Hex } from "@localnotes/shared";
 import type { Ctx, Env } from "./env";
 import { apiError, json, makeCheckpoint, nowIso, parseCheckpoint, readJson } from "./http";
 import { assignVersion, currentVersion } from "./versions";
@@ -83,6 +84,12 @@ export async function handleManifest(ctx: Ctx): Promise<Response> {
  * cursor, and pages are ordered by that counter so a client can loop until
  * `hasMore` is false and persist `nextCheckpoint` once, after everything in the
  * page has been applied locally.
+ *
+ * Both streams (nodes and attachments) share that one counter, so they must be
+ * paged together: the returned checkpoint is the *lowest* watermark of the two,
+ * never the highest. Advancing to the highest would let an attachment that
+ * arrived at version 900 skip over node changes 500–899 that were never sent,
+ * and those would be unrecoverable — the client would never ask for them again.
  */
 export async function handleChanges(ctx: Ctx): Promise<Response> {
   const sinceParam = ctx.url.searchParams.get("since");
@@ -90,7 +97,7 @@ export async function handleChanges(ctx: Ctx): Promise<Response> {
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 500) : 200;
 
   const since = parseCheckpoint(sinceParam)?.version ?? 0;
-  const retention = await oldestRetainedVersion(ctx.env, ctx.userId);
+  const retention = await oldestRetainedTombstoneVersion(ctx.env, ctx.userId);
   if (since > 0 && since < retention) {
     // A device that has been offline past the tombstone horizon must resync from
     // scratch rather than believe that missing rows were deleted.
@@ -99,22 +106,21 @@ export async function handleChanges(ctx: Ctx): Promise<Response> {
     });
   }
 
-  const rows = await ctx.env.DB.prepare(
+  const nodeRows = await ctx.env.DB.prepare(
     `${SELECT_NODE} WHERE user_id = ?1 AND server_version > ?2 ORDER BY server_version LIMIT ?3`,
   )
     .bind(ctx.userId, since, limit + 1)
     .all<NodeRow>();
-
-  const nodes = rows.results ?? [];
+  const nodes = nodeRows.results ?? [];
   const page = nodes.slice(0, limit);
-  const hasMore = nodes.length > limit;
+  const nodesHaveMore = nodes.length > limit;
 
   const attachmentRows = await ctx.env.DB.prepare(
     `SELECT id, note_id, mime, ext, size, sha256, server_version FROM attachments
      WHERE user_id = ?1 AND status = 'ready' AND server_version > ?2
      ORDER BY server_version LIMIT ?3`,
   )
-    .bind(ctx.userId, since, limit)
+    .bind(ctx.userId, since, limit + 1)
     .all<{
       id: string;
       note_id: string | null;
@@ -124,16 +130,38 @@ export async function handleChanges(ctx: Ctx): Promise<Response> {
       sha256: string;
       server_version: number;
     }>();
+  const attachments = attachmentRows.results ?? [];
+  const attachmentPage = attachments.slice(0, limit);
+  const attachmentsHaveMore = attachments.length > limit;
 
-  const highest = Math.max(
-    since,
-    ...page.map((row) => row.server_version),
-    ...(attachmentRows.results ?? []).map((row) => row.server_version),
-  );
+  // Watermark. A stream only constrains the cursor when it still has undelivered
+  // rows: then the cursor must stop at the last version this page carried, or
+  // those rows would be skipped forever. A stream that is exhausted contributes
+  // nothing, so the cursor is free to advance on the other stream's evidence.
+  //
+  // When both are exhausted the page is simply the current head of the feed, so
+  // the cursor moves to the account's current version. `since` is the floor in
+  // every case, so the cursor never moves backwards.
+  const hasMore = nodesHaveMore || attachmentsHaveMore;
+  const highest = hasMore
+    ? Math.max(
+        since,
+        Math.min(
+          ...[
+            nodesHaveMore
+              ? Math.max(since, ...page.map((row) => row.server_version))
+              : Number.POSITIVE_INFINITY,
+            attachmentsHaveMore
+              ? Math.max(since, ...attachmentPage.map((row) => row.server_version))
+              : Number.POSITIVE_INFINITY,
+          ],
+        ),
+      )
+    : await currentVersion(ctx.env, ctx.userId);
 
   return json({
     changes: page.map(toWire),
-    attachments: (attachmentRows.results ?? []).map((row) => ({
+    attachments: attachmentPage.map((row) => ({
       id: row.id,
       noteId: row.note_id,
       mime: row.mime,
@@ -228,6 +256,20 @@ export async function handlePush(ctx: Ctx): Promise<Response> {
       continue;
     }
     if (op.type === "delete_attachment") {
+      // The extension is needed to build the object key, so it is read before
+      // the row disappears.
+      const existing = await ctx.env.DB.prepare(
+        "SELECT ext FROM attachments WHERE user_id = ?1 AND id = ?2",
+      )
+        .bind(ctx.userId, op.entityId)
+        .first<{ ext: string }>();
+      if (!existing) {
+        // Already gone server-side: idempotent success, and no version is spent
+        // so the checkpoint is not pushed past this op for nothing.
+        await recordOp(ctx, op.opId, "applied", op.entityId);
+        results.push({ opId: op.opId, status: "applied" });
+        continue;
+      }
       const version = await assignVersion(ctx.env, ctx.userId);
       await ctx.env.DB.batch([
         ctx.env.DB.prepare("DELETE FROM attachments WHERE user_id = ?1 AND id = ?2").bind(
@@ -236,6 +278,13 @@ export async function handlePush(ctx: Ctx): Promise<Response> {
         ),
         insertOp(ctx, op.opId, "applied", op.entityId),
       ]);
+      try {
+        await ctx.env.FILES.delete(`users/${ctx.userId}/attachments/${op.entityId}.${existing.ext}`);
+      } catch (error) {
+        // The row is already gone; an orphaned object is reclaimable, so this
+        // is logged rather than turned into a client-visible failure.
+        console.error("Failed to delete R2 attachment object", error);
+      }
       results.push({ opId: op.opId, status: "applied", serverVersion: version });
       continue;
     }
@@ -295,6 +344,21 @@ async function applyUpsert(ctx: Ctx, op: WireOp): Promise<PushOutcome> {
     return { opId: op.opId, status: "rejected", error: `a ${payload.kind} needs a parent` };
   }
 
+  // Content is bounded here as well as on the client: a note body is the one
+  // field big enough to matter, and D1 rows have a hard size limit.
+  const content = payload.kind === "note" ? (payload.content ?? "") : "";
+  if (new TextEncoder().encode(content).length > LIMITS.contentBytes) {
+    return { opId: op.opId, status: "rejected", error: "the note body is too large" };
+  }
+  if (payload.title.length > LIMITS.titleChars) {
+    return { opId: op.opId, status: "rejected", error: "the title is too long" };
+  }
+
+  // The stored digest is recomputed, never taken from the client. Every
+  // conflict decision on every device is made by comparing this value, so a
+  // wrong one would either hide a real conflict or invent a phantom one.
+  const contentHash = await sha256Hex(content);
+
   const current = await ctx.env.DB.prepare(
     `${SELECT_NODE} WHERE user_id = ?1 AND id = ?2`,
   )
@@ -310,9 +374,21 @@ async function applyUpsert(ctx: Ctx, op: WireOp): Promise<PushOutcome> {
     };
   }
 
+  // A tombstone is a decision, not a cache entry: an upsert that did not see
+  // the delete (a stale baseVersion is already rejected above) must not
+  // resurrect the node. Both versions are preserved instead — the client keeps
+  // its text locally and the server row stays deleted.
+  if (current?.deleted_at) {
+    return {
+      opId: op.opId,
+      status: "conflict",
+      serverVersion: current.server_version,
+      server: toWire(current),
+    };
+  }
+
   const version = await assignVersion(ctx.env, ctx.userId);
   const timestamp = nowIso();
-  const content = payload.kind === "note" ? (payload.content ?? "") : "";
   const createdAt = current?.created_at ?? timestamp;
 
   await ctx.env.DB.batch([
@@ -341,8 +417,8 @@ async function applyUpsert(ctx: Ctx, op: WireOp): Promise<PushOutcome> {
       parentId,
       payload.title,
       content,
-      payload.position ?? 0,
-      payload.contentHash ?? "",
+      Number.isFinite(payload.position) ? Math.trunc(payload.position as number) : 0,
+      contentHash,
       version,
       payload.conflictOf ?? null,
       createdAt,
@@ -377,16 +453,26 @@ async function applyDelete(ctx: Ctx, op: WireOp): Promise<PushOutcome> {
       server: toWire(current),
     };
   }
+  // Already a tombstone: re-deleting is idempotent and must not burn a version,
+  // or a client retrying would push the checkpoint past its own change feed.
+  if (current.deleted_at) {
+    await recordOp(ctx, op.opId, "applied", op.entityId);
+    return { opId: op.opId, status: "applied", serverVersion: current.server_version };
+  }
 
   const version = await assignVersion(ctx.env, ctx.userId);
   const deletedAt = payload.deletedAt ?? nowIso();
   await ctx.env.DB.batch([
+    // A node can only be tombstoned while its parent still exists; deferring
+    // lets the client's op ordering (children may arrive first) settle here.
+    ctx.env.DB.prepare("PRAGMA defer_foreign_keys = ON"),
     ctx.env.DB.prepare(
       `UPDATE nodes SET deleted_at = ?3, server_version = ?4, updated_at = ?3
        WHERE user_id = ?1 AND id = ?2`,
     ).bind(ctx.userId, op.entityId, deletedAt, version),
     insertOp(ctx, op.opId, "applied", op.entityId),
   ]);
+  await deleteMirroredMarkdown(ctx.env, ctx.userId, op.entityId);
   return { opId: op.opId, status: "applied", serverVersion: version };
 }
 
@@ -407,22 +493,31 @@ async function recordOp(ctx: Ctx, opId: string, status: string, entityId: string
  */
 export const TOMBSTONE_RETENTION_DAYS = 30;
 
-async function oldestRetainedVersion(env: Env, userId: string): Promise<number> {
-  const cutoff = new Date(Date.now() - TOMBSTONE_RETENTION_DAYS * 86_400_000).toISOString();
+/**
+ * Tombstones are retained for 30 days; a device whose cursor predates the
+ * oldest tombstone still held cannot tell "deleted" from "never downloaded" and
+ * is asked to resync instead of guessing.
+ *
+ * The previous implementation computed this from tombstones *older* than the
+ * window, which is backwards: those are exactly the rows a reaper removes, and
+ * on an account whose rows have not been reaped the query returned NULL, so the
+ * check never fired. It also mixed in the minimum version across all rows, which
+ * made a fresh device that simply had not synced yet look stale.
+ *
+ * Nothing is reaped today (there is no scheduled job), so every change is still
+ * in the feed and no cursor is ever too old. The invariant is asserted rather
+ * than approximated: a device is only ever told to resync when a tombstone it
+ * could still need has actually been dropped.
+ */
+async function oldestRetainedTombstoneVersion(env: Env, userId: string): Promise<number> {
   const row = await env.DB.prepare(
     `SELECT MIN(server_version) AS version FROM nodes
-     WHERE user_id = ?1 AND deleted_at IS NOT NULL AND deleted_at < ?2`,
+     WHERE user_id = ?1 AND deleted_at IS NOT NULL AND deleted_at >= ?2`,
   )
-    .bind(userId, cutoff)
+    .bind(userId, new Date(Date.now() - TOMBSTONE_RETENTION_DAYS * 86_400_000).toISOString())
     .first<{ version: number | null }>();
-  // Tombstones older than the window have been reaped, so anything before the
-  // lowest live version is unknowable.
-  const lowest = await env.DB.prepare(
-    "SELECT MIN(server_version) AS version FROM nodes WHERE user_id = ?1",
-  )
-    .bind(userId)
-    .first<{ version: number | null }>();
-  return Math.min(row?.version ?? Number.MAX_SAFE_INTEGER, lowest?.version ?? 0);
+  // No live tombstone ⇒ nothing has been reaped ⇒ every cursor is still servable.
+  return row?.version ?? 0;
 }
 
 async function mirrorMarkdown(
@@ -434,10 +529,27 @@ async function mirrorMarkdown(
 ): Promise<void> {
   if (kind !== "note") return;
   try {
-    await env.FILES.put(`users/${userId}/notes/${noteId}.md`, content, {
+    await env.FILES.put(markdownKey(userId, noteId), content, {
       httpMetadata: { contentType: "text/markdown; charset=utf-8" },
     });
   } catch {
     // A mirror failure must not fail the sync write.
   }
+}
+
+/**
+ * Removes the R2 mirror for a deleted note. Best-effort for the same reason as
+ * the write: the D1 tombstone is authoritative, and a leftover object is
+ * reclaimable while a failed write is not.
+ */
+async function deleteMirroredMarkdown(env: Env, userId: string, noteId: string): Promise<void> {
+  try {
+    await env.FILES.delete(markdownKey(userId, noteId));
+  } catch {
+    // ignored on purpose; see above
+  }
+}
+
+function markdownKey(userId: string, noteId: string): string {
+  return `users/${userId}/notes/${noteId}.md`;
 }

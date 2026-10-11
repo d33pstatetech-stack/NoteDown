@@ -50,7 +50,7 @@ export function Sidebar(props: SidebarProps): ReactNode {
         >
           ☰
         </button>
-        {!props.collapsed ? <h1 className="ln-app-title">Local Notes</h1> : null}
+        {!props.collapsed ? <h1 className="ln-app-title">NoteDown</h1> : null}
       </div>
 
       {props.collapsed ? null : (

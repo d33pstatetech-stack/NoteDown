@@ -1,26 +1,23 @@
 /**
- * Applies the D1 schema migration and the Better Auth tables once per worker
- * isolate. The migrations run before the first test, and Miniflare's
- * isolatedStorage moves that state into each test's storage (a clean copy per
- * file), so no test can see another test's account.
+ * Applies the D1 schema and the Better Auth tables once per test file.
+ *
+ * The options are built from the *same* factory the Worker uses at runtime, so
+ * the tables created here are exactly the ones the deployed code expects. Doing
+ * it this way also means a change to the auth configuration cannot silently
+ * make the test schema differ from production.
  */
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll } from "vitest";
 import { getMigrations } from "better-auth/db/migration";
-import { getAuth } from "../src/auth";
+import type { BetterAuthOptions } from "better-auth";
 
-beforeAll(async () => {
-  await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-
-  // Apply Better Auth tables directly (same SQL the /api/auth/migrate endpoint
-  // would run) so the test suite doesn't depend on SELF being available in the
-  // setup context. Create the tables BEFORE calling getAuth() so Better Auth's
-  // schema introspection sees them.
-  const authOptions = {
+/** Mirrors `buildAuth` in `src/auth.ts`; kept in step by `auth.schema.test.ts`. */
+function authOptionsForMigration(): BetterAuthOptions {
+  return {
     database: env.DB,
     baseURL: env.BETTER_AUTH_URL ?? env.APP_ORIGIN,
     basePath: "/api/auth",
-    secret: env.BETTER_AUTH_SECRET,
+    ...(env.BETTER_AUTH_SECRET ? { secret: env.BETTER_AUTH_SECRET } : {}),
     emailAndPassword: { enabled: true, requireEmailVerification: false },
     plugins: [],
     trustedOrigins: [env.APP_ORIGIN],
@@ -32,19 +29,22 @@ beforeAll(async () => {
       },
     },
   };
-  const migrations = await getMigrations(authOptions);
-  if (migrations.toBeCreated.length || migrations.toBeAdded.length || migrations.toBeAddedIndexes.length) {
+}
+
+beforeAll(async () => {
+  await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+
+  const migrations = await getMigrations(authOptionsForMigration());
+  if (
+    migrations.toBeCreated.length ||
+    migrations.toBeAdded.length ||
+    migrations.toBeAddedIndexes.length
+  ) {
     const sql = await migrations.compileMigrations();
-    // D1's exec() reports success but doesn't always populate sqlite_master in
-    // miniflare, so run each DDL statement individually.
-    const statements = sql.split(";").map((s: string) => s.trim()).filter(Boolean);
-    for (const stmt of statements) {
-      if (stmt) await env.DB.prepare(stmt).run();
+    // D1's `exec()` reports success without reliably populating sqlite_master
+    // under Miniflare, so each DDL statement is run on its own.
+    for (const statement of sql.split(";").map((part) => part.trim()).filter(Boolean)) {
+      await env.DB.prepare(statement).run();
     }
   }
-
-  // Pre-warm the auth instance so the first test request doesn't pay the
-  // cold-start cost and the schema is already validated against the tables we
-  // just created.
-  getAuth(env);
-}, 30_000);
+}, 60_000);

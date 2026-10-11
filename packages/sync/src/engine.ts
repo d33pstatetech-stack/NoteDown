@@ -6,7 +6,7 @@ import type {
   RemoteNode,
   RemoteSyncClient,
 } from "./client";
-import { isAuthError, isOfflineError, nextAttemptDelay } from "./errors";
+import { isAuthError, isOfflineError, isStaleCheckpointError, nextAttemptDelay } from "./errors";
 import type { SyncReport, SyncStateName, SyncStatusSnapshot } from "./status";
 
 export interface SyncEngineOptions {
@@ -26,6 +26,20 @@ const EMPTY_REPORT: SyncReport = {
   pushedAttachments: 0,
   downloadedAttachments: 0,
 };
+
+/** Upper bound on change-feed pages consumed by a single run. It exists to stop a
+ * misbehaving server (one that always reports `hasMore`) from pinning the
+ * isolate forever; 50 pages at the default batch size is 2 500 changes, far
+ * beyond any realistic single cycle.
+ */
+const MAX_PULL_PAGES = 50;
+
+interface PullResult {
+  applied: number;
+  downloaded: number;
+  downloadedAttachments: number;
+  conflicts: number;
+}
 
 /**
  * Drives synchronization. Order matters and is enforced here:
@@ -113,7 +127,18 @@ export class SyncEngine {
       report.pushedAttachments = pushed.attachments;
       report.conflicts += pushed.conflicts;
 
-      const pulled = await this.pullOnce();
+      let pulled: PullResult;
+      try {
+        pulled = await this.pullOnce();
+      } catch (error) {
+        if (!isStaleCheckpointError(error)) throw error;
+        // The cursor predates the server's tombstone horizon, so an incremental
+        // feed cannot be trusted to contain every delete. Clear the cursor and
+        // pull everything from zero. Nothing local is discarded: applying a
+        // remote change never overwrites an unsynced local edit.
+        await this.store.setCheckpoint(null);
+        pulled = await this.pullOnce();
+      }
       report.applied = pulled.applied;
       report.downloaded = pulled.downloaded;
       report.downloadedAttachments = pulled.downloadedAttachments;
@@ -122,7 +147,7 @@ export class SyncEngine {
       await this.store.setMeta("sync.lastSyncedAt", nowIso(this.now()));
       this.lastSyncedAt = nowIso(this.now());
       await this.refreshPending();
-      this.setState(this.pending > 0 ? "idle" : "idle");
+      this.setState("idle");
       return report;
     } catch (error) {
       // A wholesale transport failure still has to schedule the retry: without
@@ -205,7 +230,10 @@ export class SyncEngine {
 
     // Mark as sent *before* the request so the hash is recorded even if the
     // response never arrives (that is what makes 409 classification possible).
-    for (const op of batch) await this.store.markOpSent(op.opId);
+    // Only the node ops: the attachment ops above have already been resolved
+    // (or have their own backoff), and re-marking them would corrupt their
+    // attempt counters.
+    for (const op of nodeOps) await this.store.markOpSent(op.opId);
 
     const response = await client.push(ops);
     let pushed = 0;
@@ -259,12 +287,7 @@ export class SyncEngine {
     return { pushed, attachments, conflicts };
   }
 
-  private async pullOnce(): Promise<{
-    applied: number;
-    downloaded: number;
-    downloadedAttachments: number;
-    conflicts: number;
-  }> {
+  private async pullOnce(): Promise<PullResult> {
     const client = this.client;
     if (!client) return { applied: 0, downloaded: 0, downloadedAttachments: 0, conflicts: 0 };
     let checkpoint = await this.store.getCheckpoint();
@@ -274,7 +297,7 @@ export class SyncEngine {
     let hasMore = true;
     let pages = 0;
 
-    while (hasMore && pages < 50) {
+    while (hasMore && pages < MAX_PULL_PAGES) {
       pages += 1;
       const page = await client.fetchChanges(checkpoint, this.batchSize);
       for (const change of page.changes) {
@@ -298,7 +321,16 @@ export class SyncEngine {
       hasMore = page.hasMore;
     }
 
-    return { applied, downloaded: applied, downloadedAttachments, conflicts };
+    if (hasMore) {
+      // The page budget ran out. The checkpoint already covers everything that
+      // was applied, so the next run continues from there rather than
+      // restarting; say so instead of silently reporting a clean sync.
+      throw new Error(
+        `Sync pull did not finish within ${MAX_PULL_PAGES} pages; the rest continues on the next run`,
+      );
+    }
+
+    return { applied, downloaded: downloadedAttachments, downloadedAttachments, conflicts };
   }
 
   private backoffIso(attempts: number): string {

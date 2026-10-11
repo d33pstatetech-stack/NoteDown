@@ -21,9 +21,11 @@ export default defineConfig({
     },
   },
   server: {
-    // Bind all interfaces so the Cloud preview tunnel can reach the dev server.
+    // Port 5173 is Vite's default and is what `APP_ORIGIN` in the Worker's
+    // wrangler config is set to; the two must agree or the API's CORS and CSRF
+    // checks will reject the browser client.
     host: "0.0.0.0",
-    port: 3000,
+    port: 5173,
     strictPort: true,
     // Additional allowed hosts come from Vite's own
     // __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS environment variable; no hostname

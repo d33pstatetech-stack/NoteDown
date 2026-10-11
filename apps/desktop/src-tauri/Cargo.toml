@@ -20,6 +20,10 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Attachment bytes and the sync bearer token cross the IPC boundary as base64,
+# because Tauri's default JSON serializer would expand a `Uint8Array` into an
+# array of numbers (~3.6x larger).
+base64 = "0.22"
 notes-store = { path = "../../../crates/notes-store" }
 
 [profile.release]

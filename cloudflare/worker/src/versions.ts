@@ -1,5 +1,12 @@
 import type { Env } from "./env";
-import { nowIso } from "./http";
+
+/**
+ * How many times a version assignment retries after losing the compare-and-set
+ * race. Contention is per-user and per-write, so a handful of attempts is
+ * already generous; exhausting them means something is genuinely wrong and the
+ * caller should surface an error rather than issue a duplicate version.
+ */
+const VERSION_ASSIGN_ATTEMPTS = 6;
 
 /**
  * Assigns the next value of the per-user monotonic `serverVersion`.
@@ -10,13 +17,16 @@ import { nowIso } from "./http";
  * with a guarded UPDATE and retried on contention.
  */
 export async function assignVersion(env: Env, userId: string): Promise<number> {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    await env.DB.prepare(
-      "INSERT INTO user_versions (user_id, version) VALUES (?1, 0) ON CONFLICT(user_id) DO NOTHING",
-    )
-      .bind(userId)
-      .run();
+  // Ensure the row exists before the CAS loop: an `INSERT ... DO NOTHING` on
+  // every attempt would work too, but doing it once keeps the hot path to a
+  // single statement pair.
+  await env.DB.prepare(
+    "INSERT INTO user_versions (user_id, version) VALUES (?1, 0) ON CONFLICT(user_id) DO NOTHING",
+  )
+    .bind(userId)
+    .run();
 
+  for (let attempt = 0; attempt < VERSION_ASSIGN_ATTEMPTS; attempt += 1) {
     const row = await env.DB.prepare("SELECT version FROM user_versions WHERE user_id = ?1")
       .bind(userId)
       .first<{ version: number }>();
@@ -29,6 +39,10 @@ export async function assignVersion(env: Env, userId: string): Promise<number> {
       .run();
 
     if ((updated.meta.changes ?? 0) === 1) return current + 1;
+    // Lost the race: another writer bumped the counter first. Re-read and try
+    // again. Crucially we do NOT return `current + 1` here — that version may
+    // already have been handed to the writer that won, and issuing it twice
+    // would break the "one total order" guarantee the change feed depends on.
   }
   throw new Error("could not assign a sync version after repeated contention");
 }
@@ -40,10 +54,3 @@ export async function currentVersion(env: Env, userId: string): Promise<number> 
     .first<{ version: number }>();
   return row?.version ?? 0;
 }
-
-/** Called after a batch that already bumped the version. */
-export function staleCheckpointResponse(): never {
-  throw new Error("stale_checkpoint");
-}
-
-export { nowIso };

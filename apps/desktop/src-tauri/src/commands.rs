@@ -31,7 +31,9 @@ fn open_store(app: &AppHandle) -> Result<NoteStore, String> {
         .path()
         .app_data_dir()
         .unwrap_or_else(|_| notes_store::paths::data_dir());
-    NoteStore::open(directory.join("notes.sqlite3")).map_err(StoreError::to_string)
+    // `StoreError::to_string` takes `&self`, so it cannot be used directly as a
+    // `fn(StoreError) -> String` by `map_err`; the closure is what adapts it.
+    NoteStore::open(directory.join("notes.sqlite3")).map_err(|error| error.to_string())
 }
 
 fn with_store<T>(
@@ -44,7 +46,7 @@ fn with_store<T>(
         *guard = Some(open_store(app)?);
     }
     let store = guard.as_mut().expect("store was just initialised");
-    action(store).map_err(StoreError::to_string)
+    action(store).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -165,10 +167,20 @@ pub fn store_info(
 
 /// Writes an exported archive to a path the user chose in the file dialog.
 /// Exports never write anywhere the user did not explicitly pick.
+///
+/// The path still has to look like an archive: this command is reachable from
+/// the webview, and a compromised frontend must not be able to turn "export my
+/// notes" into "overwrite this file".
 #[tauri::command]
 pub fn save_export(path: String, bytes_base64: String) -> Result<(), String> {
+    let target = std::path::PathBuf::from(&path);
+    if target.extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase)
+        != Some("zip".to_string())
+    {
+        return Err("exports must be written to a .zip file".to_string());
+    }
     let bytes = decode_base64(&bytes_base64)?;
-    std::fs::write(&path, bytes).map_err(|error| error.to_string())
+    std::fs::write(&target, bytes).map_err(|error| error.to_string())
 }
 
 /// Writes an export next to the database, for the "export for backup" path where
@@ -198,6 +210,76 @@ fn decode_base64(value: &str) -> Result<Vec<u8>, String> {
     base64::engine::general_purpose::STANDARD
         .decode(value)
         .map_err(|error| error.to_string())
+}
+
+/// ── sync session credentials ───────────────────────────────────────────────
+//
+// The desktop has no cookie jar, so the sync bearer token has to live somewhere
+// outside the webview. It is stored in the same application data directory as
+// the database, in a file that is created with owner-only permissions on the
+// platforms where that is meaningful (Windows ACL / POSIX mode 0600), and it is
+// deliberately **not** in the SQLite database: it must not end up in a ZIP
+// export, and it must never be readable from a note row.
+
+fn credentials_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let directory = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| notes_store::paths::data_dir());
+    Ok(directory.join("sync-credentials.json"))
+}
+
+fn restrict_to_owner(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("could not restrict credential file permissions: {error}"))?;
+    }
+    #[cfg(not(unix))]
+    {
+        // On Windows the file inherits the per-user ACL of the application data
+        // directory, which is already user-scoped; there is nothing extra to do
+        // here, and `path` is unused in this configuration.
+        let _ = path;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_sync_token(app: AppHandle, token: Option<String>) -> Result<(), String> {
+    let path = credentials_path(&app)?;
+    let target = match token {
+        Some(value) if !value.trim().is_empty() => value,
+        // Signing out removes the file rather than writing an empty one.
+        _ => {
+            if path.exists() {
+                std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+            }
+            return Ok(());
+        }
+    };
+    if parent_exists(&path) {
+        std::fs::write(&path, target.as_bytes()).map_err(|error| error.to_string())?;
+    } else {
+        return Err("the application data directory is not available".to_string());
+    }
+    restrict_to_owner(&path)
+}
+
+#[tauri::command]
+pub fn get_sync_token(app: AppHandle) -> Result<Option<String>, String> {
+    let path = credentials_path(&app)?;
+    match std::fs::read_to_string(&path) {
+        Ok(value) if !value.trim().is_empty() => Ok(Some(value)),
+        Ok(_) => Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn parent_exists(path: &std::path::Path) -> bool {
+    path.parent().map(|dir| dir.is_dir()).unwrap_or(false)
 }
 
 /// Attachment ids and export names are never allowed to become a path.

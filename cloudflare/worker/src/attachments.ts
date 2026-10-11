@@ -16,8 +16,16 @@ export const USER_ATTACHMENT_QUOTA_BYTES = 512 * 1024 * 1024;
 const STAGING_TTL_MINUTES = 15;
 
 interface UploadBody {
-  meta?: { noteId?: string | null; mime?: string; ext?: string; size?: number; sha256?: string };
-  bytesBase64?: string;
+  meta?: {
+    noteId?: string | null;
+    mime?: string;
+    ext?: string;
+    size?: number;
+    sha256?: string;
+    /** Display name only. Sanitised on arrival; never used to build a key. */
+    filename?: string;
+  };
+  bytesBase64: string;
 }
 
 /**
@@ -28,6 +36,9 @@ interface UploadBody {
  * first, the object is written second, and the row is committed last: a crash or
  * a failed object write leaves an invisible staging row that a reaper can clean
  * up, never a note pointing at an object that does not exist.
+ *
+ * Re-uploading an id whose bytes are unchanged is a no-op that returns the
+ * existing version, so a retried upload does not churn the change feed.
  */
 export async function handleAttachmentUpload(ctx: Ctx, id: string): Promise<Response> {
   let body: UploadBody;
@@ -66,6 +77,25 @@ export async function handleAttachmentUpload(ctx: Ctx, id: string): Promise<Resp
     return apiError("invalid_request", "the supplied size does not match the uploaded bytes");
   }
 
+  // An identical object already committed under this id is left alone.
+  const committed = await ctx.env.DB.prepare(
+    `SELECT sha256, ext, server_version, status FROM attachments
+     WHERE user_id = ?1 AND id = ?2 AND status = 'ready'`,
+  )
+    .bind(ctx.userId, id)
+    .first<{ sha256: string; ext: string; server_version: number; status: string }>();
+  if (committed && committed.sha256 === sha256 && committed.ext === ext) {
+    return json({
+      id,
+      mime,
+      ext,
+      size: bytes.length,
+      sha256,
+      serverVersion: committed.server_version,
+      duplicate: true,
+    });
+  }
+
   const usage = await ctx.env.DB.prepare(
     "SELECT COALESCE(SUM(size), 0) AS total FROM attachments WHERE user_id = ?1 AND id <> ?2",
   )
@@ -79,7 +109,24 @@ export async function handleAttachmentUpload(ctx: Ctx, id: string): Promise<Resp
 
   const stagingId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + STAGING_TTL_MINUTES * 60_000).toISOString();
-  const filename = safeFilename(body.meta?.mime ? `attachment.${ext}` : `attachment.${ext}`, ext);
+  // The display name is sanitised and constrained; the object key is derived
+  // from the attachment id, so nothing a client sends can influence a path.
+  const filename = safeFilename(body.meta?.filename ?? `attachment.${ext}`, ext);
+
+  // Ownership of the parent note is checked explicitly: `note_id` is a
+  // composite foreign key, so a foreign id would surface as an opaque
+  // constraint error rather than a clear rejection.
+  const noteId = body.meta?.noteId ?? null;
+  if (noteId !== null) {
+    const note = await ctx.env.DB.prepare(
+      "SELECT id FROM nodes WHERE user_id = ?1 AND id = ?2",
+    )
+      .bind(ctx.userId, noteId)
+      .first<{ id: string }>();
+    if (!note) {
+      return apiError("invalid_request", "the note this attachment belongs to does not exist");
+    }
+  }
 
   await ctx.env.DB.prepare(
     `INSERT INTO attachments (user_id, id, note_id, filename, mime, ext, size, sha256, status,
@@ -94,7 +141,7 @@ export async function handleAttachmentUpload(ctx: Ctx, id: string): Promise<Resp
     .bind(
       ctx.userId,
       id,
-      body.meta?.noteId ?? null,
+      noteId,
       filename,
       mime,
       ext,
@@ -191,11 +238,17 @@ export async function handleAttachmentDelete(ctx: Ctx, id: string): Promise<Resp
   if (!row) return apiError("not_found", "Attachment not found");
 
   // Metadata first, then the object: an orphaned object is recoverable, a row
-  // without bytes is not.
+  // without bytes is not. A failure to remove the object is logged rather than
+  // surfaced — the row is already gone, so reporting an error would only
+  // invite the client to retry a delete that has effectively succeeded.
   await ctx.env.DB.prepare("DELETE FROM attachments WHERE user_id = ?1 AND id = ?2")
     .bind(ctx.userId, id)
     .run();
-  await ctx.env.FILES.delete(`users/${ctx.userId}/attachments/${id}.${row.ext}`);
+  try {
+    await ctx.env.FILES.delete(`users/${ctx.userId}/attachments/${id}.${row.ext}`);
+  } catch (error) {
+    console.error("Failed to delete R2 attachment object", error);
+  }
   const version = await assignVersion(ctx.env, ctx.userId);
   return json({ id, deleted: true, serverVersion: version });
 }

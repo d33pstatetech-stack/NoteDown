@@ -1,4 +1,10 @@
-import { NetworkError, UnauthorizedError, sha256Hex, toBase64 } from "@localnotes/shared";
+import {
+  NetworkError,
+  StaleCheckpointError,
+  UnauthorizedError,
+  sha256Hex,
+  toBase64,
+} from "@localnotes/shared";
 import type { AttachmentMeta } from "@localnotes/shared";
 import type {
   ChangesPage,
@@ -58,7 +64,11 @@ export class HttpRemoteClient implements RemoteSyncClient {
       } catch {
         // ignore malformed error bodies
       }
-      throw new NetworkError(body.error?.message ?? `Sync request failed (${response.status})`, {
+      const message = body.error?.message ?? `Sync request failed (${response.status})`;
+      // `stale_checkpoint` is a protocol signal, not a transport failure: the
+      // engine has to clear its cursor and pull from zero instead of retrying.
+      if (body.error?.code === "stale_checkpoint") throw new StaleCheckpointError(message);
+      throw new NetworkError(message, {
         details: { status: response.status, code: body.error?.code },
       });
     }

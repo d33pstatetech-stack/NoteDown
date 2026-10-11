@@ -18,7 +18,8 @@ const ATTACHMENT_ROUTE = /^\/api\/attachments\/([^/]+)$/;
  *
  * Order of operations for every request:
  *   1. CORS (exact origin only; other origins get no headers),
- *   2. health and the Better Auth handler (both unauthenticated),
+ *   2. health, the Better Auth handler, and the schema-migration route (all
+ *      unauthenticated),
  *   3. `requireUser` — the session, never a body field, decides ownership,
  *   4. a same-origin check for state-changing requests (CSRF defence),
  *   5. the route.
@@ -35,9 +36,12 @@ export default {
       return withCors(await route(request, env, url), env, request);
     } catch (error) {
       const message = error instanceof Error ? error.message : "unexpected error";
-      // Never leak stack traces or bindings to a client.
+      // The reason is logged for the operator and deliberately not returned:
+      // a body that echoes internal messages is how stack and binding details
+      // leak to a caller.
+      console.error("Unhandled worker error", message);
       return withCors(
-        apiError("internal", "The server could not complete this request", { reason: message }),
+        apiError("internal", "The server could not complete this request"),
         env,
         request,
       );
@@ -51,13 +55,22 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   // Better Auth owns its own routes (sign-up, sign-in, sign-out, session,
-  // bearer token exchange).
+  // bearer token exchange). It must be reached before any session check,
+  // because establishing a session is what the rest of the API authenticates.
   if (url.pathname.startsWith("/api/auth/") && !url.pathname.startsWith("/api/auth/migrate")) {
     return getAuth(env).handler(request);
   }
 
   if (!url.pathname.startsWith("/api/")) {
     return apiError("not_found", "Unknown route");
+  }
+
+  // The one-off schema migration authenticates with its own bearer secret
+  // rather than a session — on a fresh database there is no `session` table,
+  // and therefore no session a caller could present. It is handled before
+  // `requireUser` precisely because of that.
+  if (url.pathname === "/api/auth/migrate") {
+    return handleAuthMigration({ env, request, userId: "", url });
   }
 
   const user = await requireUser(env, request);
@@ -70,9 +83,6 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 
   const ctx = { env, request, userId: user.id, url };
 
-  if (url.pathname === "/api/auth/migrate") {
-    return handleAuthMigration(ctx);
-  }
   if (url.pathname === "/api/me") {
     return json({ user: { id: user.id, email: user.email } });
   }

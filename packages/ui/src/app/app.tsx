@@ -11,31 +11,28 @@ import { readFileBytes, subtreeIds } from "@localnotes/shared";
 import type { Store } from "@localnotes/shared";
 import { useWorkspace } from "./workspace";
 import { useTheme } from "./theme";
+import { useSyncController } from "./sync-controller";
 import { Sidebar } from "../components/sidebar";
 import { EditorPane } from "../components/editor-pane";
-import { StatusBar, type SyncStatus } from "../components/status-bar";
+import { StatusBar } from "../components/status-bar";
+import { AuthDialog } from "../components/auth-dialog";
 import { ConfirmDialog, MoveDialog, NoticeStack } from "../components/dialogs";
 
 export interface AppProps {
   store: Store;
-  /** Cloud sync is Phase 3; the app renders "local only" until a client exists. */
-  sync?: Partial<SyncStatus>;
   autosaveDelayMs?: number;
   /** Overridable for tests; defaults to a browser download. */
   onDownload?: (bytes: Uint8Array, filename: string) => void;
   appName?: string;
 }
 
-const DEFAULT_SYNC: SyncStatus = {
-  state: "disabled",
-  pending: 0,
-  lastSyncedAt: null,
-  error: null,
-};
+/** Event the status bar dispatches to open the sign-in dialog. */
+export const OPEN_SIGN_IN_EVENT = "localnotes:sign-in";
 
 export function App(props: AppProps): ReactNode {
   const { store } = props;
   const theme = useTheme();
+  const sync = useSyncController();
   const api = useWorkspace(store, {
     ...(props.autosaveDelayMs === undefined ? {} : { autosaveDelayMs: props.autosaveDelayMs }),
   });
@@ -43,13 +40,31 @@ export function App(props: AppProps): ReactNode {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInMode, setSignInMode] = useState<"sign-in" | "sign-up">("sign-in");
   const searchRef = useRef<HTMLInputElement | null>(null);
   const importRef = useRef<HTMLInputElement | null>(null);
 
-  const sync: SyncStatus = useMemo(
-    () => ({ ...DEFAULT_SYNC, ...props.sync, pending: api.pendingOps }),
-    [api.pendingOps, props.sync],
-  );
+  // The status bar asks to open the dialog through an event rather than a prop,
+  // which keeps the status bar free of layout state it does not own.
+  useEffect(() => {
+    const open = (): void => {
+      setSignInMode("sign-in");
+      setSigningIn(true);
+    };
+    document.addEventListener(OPEN_SIGN_IN_EVENT, open);
+    return () => document.removeEventListener(OPEN_SIGN_IN_EVENT, open);
+  }, []);
+
+  // A sync cycle can create conflict copies and pull remote edits, so the tree
+  // has to be re-read once a run finishes — otherwise the sidebar would keep
+  // showing the state from before the last sync.
+  const lastSyncedAt = sync.status.lastSyncedAt;
+  const reload = api.reload;
+  useEffect(() => {
+    if (!lastSyncedAt) return;
+    void reload();
+  }, [lastSyncedAt, reload]);
 
   // Expand every notebook once the first tree arrives, so notes are reachable.
   useEffect(() => {
@@ -273,6 +288,20 @@ export function App(props: AppProps): ReactNode {
       />
 
       <NoticeStack notices={api.notices} onDismiss={api.dismissNotice} />
+
+      <AuthDialog
+        open={signingIn}
+        initialMode={signInMode}
+        onSignIn={async (email, password) => {
+          await sync.signIn(email, password);
+          await api.reload();
+        }}
+        onSignUp={async (email, password, name) => {
+          await sync.signUp(email, password, name);
+          await api.reload();
+        }}
+        onClose={() => setSigningIn(false)}
+      />
 
       <ConfirmDialog
         open={deleting !== null}

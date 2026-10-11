@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "include": [
+    "../../types/globals.d.ts",
     "src",
     "../../types/test-env.d.ts"
   ]

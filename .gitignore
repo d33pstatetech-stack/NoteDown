@@ -1,15 +1,72 @@
+# ── Dependencies and build output ───────────────────────────────────────────
 node_modules/
 dist/
 build/
 coverage/
-*.local
+target/
+crates/*/target/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+# Rust target dir used by the end-to-end SQLite bridge.
+target-e2e/
+
+# ── Cloudflare local state ──────────────────────────────────────────────────
+# `.wrangler/` holds the local D1/R2/KV databases and the bundled workerd
+# output. It is generated, and it contains real data from local test runs.
+.wrangler/
+
+# ── Secrets and credentials ─────────────────────────────────────────────────
+# Environment files. `.env.example` is the only one meant to be committed, and
+# it must never contain a real value.
 .env
 .env.*
 !.env.example
-.DS_Store
-*.log
-crates/*/target/
-target/
-apps/desktop/src-tauri/target/
-apps/desktop/src-tauri/gen/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Key material. None of this belongs in a repository: certificates and private
+# keys are issued per-machine and are rotated independently of the source.
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.ppk
+
+# Credential stores and local databases that can hold tokens or user data.
+credentials
+credentials.*
+*.keychain
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3-journal
+*.db
+*.db-shm
+*.db-wal
+
+# Wrangler writes the OAuth session here. It is a bearer token for the whole
+# account and must never leave the machine.
 .wrangler/
+config/default.toml
+
+# ── Tooling noise ───────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+.idea/
+*.swp
+
+# The SQLite bridge binary, in case it is ever built in-tree.
+tests/e2e/bridge/target/

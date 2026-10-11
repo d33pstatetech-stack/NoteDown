@@ -1,4 +1,4 @@
-import { AppError, NetworkError, UnauthorizedError } from "@localnotes/shared";
+import { AppError, NetworkError, StaleCheckpointError, UnauthorizedError } from "@localnotes/shared";
 
 export function isOfflineError(error: unknown): boolean {
   return error instanceof NetworkError || (error instanceof AppError && error.code === "network");
@@ -6,6 +6,11 @@ export function isOfflineError(error: unknown): boolean {
 
 export function isAuthError(error: unknown): boolean {
   return error instanceof UnauthorizedError;
+}
+
+/** The cursor is too old for an incremental feed; a full resync is required. */
+export function isStaleCheckpointError(error: unknown): boolean {
+  return error instanceof StaleCheckpointError;
 }
 
 /**

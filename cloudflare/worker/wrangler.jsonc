@@ -1,10 +1,16 @@
 {
   // Deploy configuration for the Local-First Notes API.
-  // See cloudflare/README.md for the full setup order.
+  //
+  // `database_id` is filled in by `wrangler d1 create` and is committed on
+  // purpose: it is an identifier, not a secret, and the Worker cannot be deployed
+  // without it. Secrets (`BETTER_AUTH_SECRET`, `AUTH_MIGRATION_TOKEN`) are set
+  // with `wrangler secret put` and are never stored here.
+  //
+  // See docs/DEPLOYMENT.md for the full, ordered setup.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "localnotes-api",
+  "name": "notedown-api",
   "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
+  "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": {
@@ -12,37 +18,30 @@
   },
   "vars": {
     // Public identifiers only. Anything secret is a `wrangler secret`.
-    "APP_ORIGIN": "http://localhost:3000"
+    // This MUST match the origin the web app is served from: it is the single
+    // value used for both the CORS allow-list and the CSRF origin check.
+    //
+    // Two environments are supported by switching this one value:
+    //   local  -> http://localhost:5173        (wrangler dev + pnpm dev:web)
+    //   hosted -> https://notedown-1i4.pages.dev
+    // The hosted value is the subdomain Cloudflare actually assigned to the
+    // Pages project, and it must match byte-for-byte: the same string drives
+    // the CORS allow-list, the CSRF origin check, and Better Auth's cookie
+    // decision. `notedown.pages.dev` was already taken, hence the `-1i4` suffix.
+    "APP_ORIGIN": "https://notedown-1i4.pages.dev"
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "localnotes",
-      "database_id": "<set-with-wrangler-d1-create>",
+      "database_name": "notedown",
+      "database_id": "8d93cac4-b136-495c-959d-89f2317cfeaa",
       "migrations_dir": "../migrations"
     }
   ],
   "r2_buckets": [
     {
       "binding": "FILES",
-      "bucket_name": "localnotes-files"
+      "bucket_name": "notedown-files"
     }
-  ],
-  "env": {
-    "production": {
-      "name": "localnotes-api",
-      "vars": {
-        "APP_ORIGIN": "https://notes.example.com"
-      },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "localnotes-prod",
-          "database_id": "<set-with-wrangler-d1-create>",
-          "migrations_dir": "../migrations"
-        }
-      ],
-      "r2_buckets": [{ "binding": "FILES", "bucket_name": "localnotes-files-prod" }]
-    }
-  }
+  ]
 }

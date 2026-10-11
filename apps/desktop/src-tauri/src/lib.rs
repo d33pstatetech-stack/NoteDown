@@ -30,6 +30,8 @@ pub fn run() {
             commands::store_info,
             commands::save_export,
             commands::save_export_to_app_dir,
+            commands::set_sync_token,
+            commands::get_sync_token,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Local Notes desktop application");
