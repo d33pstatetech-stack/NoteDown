@@ -152,9 +152,9 @@ Implementations:
 
 | OS      | Database                                  | Attachments                                        |
 |---------|-------------------------------------------|----------------------------------------------------|
-| Linux   | `~/.local/share/com.localnotes.app/notes.sqlite3` | `~/.local/share/com.localnotes.app/attachments/<id>.<ext>` |
-| Windows | `%APPDATA%\com.localnotes.app\notes.sqlite3`      | `%APPDATA%\com.localnotes.app\attachments\<id>.<ext>`      |
-| macOS   | `~/Library/Application Support/com.localnotes.app/notes.sqlite3` | same directory |
+| Linux   | `~/.local/share/com.notedown.app/notes.sqlite3` | `~/.local/share/com.notedown.app/attachments/<id>.<ext>` |
+| Windows | `%APPDATA%\com.notedown.app\notes.sqlite3`      | `%APPDATA%\com.notedown.app\attachments\<id>.<ext>`      |
+| macOS   | `~/Library/Application Support/com.notedown.app/notes.sqlite3` | same directory |
 
 Attachment strategy (chosen): **metadata in SQLite, bytes on disk** in the
 app-managed `attachments/` directory. The `AttachmentRepository` interface does

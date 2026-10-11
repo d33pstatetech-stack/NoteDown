@@ -4,9 +4,9 @@
 
 | OS | Application directory | Database | Attachments |
 |---|---|---|---|
-| Linux | `~/.local/share/com.localnotes.app/` (`$XDG_DATA_HOME`) | `notes.sqlite3` | `attachments/<attachment-id>.<ext>` |
-| Windows | `%APPDATA%\com.localnotes.app\` | `notes.sqlite3` | `attachments\<attachment-id>.<ext>` |
-| macOS | `~/Library/Application Support/com.localnotes.app/` | `notes.sqlite3` | `attachments/<attachment-id>.<ext>` |
+| Linux | `~/.local/share/com.notedown.app/` (`$XDG_DATA_HOME`) | `notes.sqlite3` | `attachments/<attachment-id>.<ext>` |
+| Windows | `%APPDATA%\com.notedown.app\` | `notes.sqlite3` | `attachments\<attachment-id>.<ext>` |
+| macOS | `~/Library/Application Support/com.notedown.app/` | `notes.sqlite3` | `attachments/<attachment-id>.<ext>` |
 
 Files inside the application directory:
 
@@ -21,7 +21,7 @@ and `busy_timeout = 5000`. Migrations are explicit and versioned in
 `crates/notes-store/src/migrations.rs` and applied on startup; the applied
 version is stored in the `schema_migrations` table.
 
-**Backup:** quit the app, then copy the whole `com.localnotes.app` directory.
+**Backup:** quit the app, then copy the whole `com.notedown.app` directory.
 For a live backup use `sqlite3 notes.sqlite3 "VACUUM INTO 'backup.sqlite3'"`.
 Restoring is copying the directory back. The in-app **Export** (ZIP) is the
 recommended portable backup because it is Markdown and does not depend on

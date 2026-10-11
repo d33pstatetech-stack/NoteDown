@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoteDown — Install, Data &amp; Security</title>
+<meta name="description" content="Install NoteDown on Windows and Linux, find and back up your notes, and understand how your data is protected.">
+<style>
+  /* ── Design tokens ───────────────────────────────────────────────────── */
+  :root {
+    --bg:        #0f1115;
+    --bg-soft:   #161a21;
+    --bg-card:   #1b2029;
+    --bg-code:   #12151b;
+    --border:    #2a313d;
+    --border-lit:#3b4453;
+    --text:      #e6e9ef;
+    --text-dim:  #a3adbd;
+    --text-mute: #6f7a8c;
+    --accent:    #6ea8fe;
+    --accent-dim:#2d4a7c;
+    --warn:      #f0b849;
+    --warn-bg:   #2a2314;
+    --danger:    #f2777a;
+    --danger-bg: #2c1a1c;
+    --ok:        #6cc494;
+    --ok-bg:     #16261f;
+
+    --radius: 10px;
+    --measure: 78ch;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* ── Base ────────────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.7 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────────────────── */
+  .wrap {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    gap: 3rem;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 6rem;
+  }
+
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; gap: 2rem; padding: 1.5rem 1.25rem 4rem; }
+    .sidebar { position: static !important; height: auto !important; border-right: 0 !important;
+               border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; }
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────────── */
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding-right: 1rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    margin-bottom: .35rem;
+  }
+  .brand-mark { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
+  .brand-ver  { font: 500 .72rem var(--mono); color: var(--text-mute); }
+
+  .tagline {
+    margin: 0 0 1.5rem;
+    font-size: .82rem;
+    color: var(--text-mute);
+    line-height: 1.5;
+  }
+
+  .nav-group + .nav-group { margin-top: 1.4rem; }
+  .nav-label {
+    font: 600 .68rem/1 var(--mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+    margin-bottom: .6rem;
+  }
+  .nav-list { list-style: none; margin: 0; padding: 0; }
+  .nav-list a {
+    display: block;
+    padding: .3rem .55rem;
+    margin-left: -.55rem;
+    border-radius: 6px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: .875rem;
+    transition: background .12s, color .12s;
+  }
+  .nav-list a:hover { background: var(--bg-soft); color: var(--text); }
+  .nav-list a.active { background: var(--accent-dim); color: #fff; }
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  main { min-width: 0; }
+
+  h1 {
+    font-size: 2.1rem;
+    line-height: 1.2;
+    letter-spacing: -.025em;
+    margin: 0 0 .6rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+    letter-spacing: -.015em;
+    margin: 3.5rem 0 1rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin: 2.25rem 0 .6rem;
+    color: var(--text);
+  }
+  h2:first-of-type { margin-top: 2rem; }
+
+  p  { margin: 0 0 1.1rem; max-width: var(--measure); }
+  li { margin-bottom: .45rem; }
+  ul, ol { max-width: var(--measure); padding-left: 1.3rem; }
+  li > ul, li > ol { margin-top: .45rem; }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  strong { color: #fff; font-weight: 600; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 3rem 0; }
+
+  /* ── Hero ────────────────────────────────────────────────────────────── */
+  .hero {
+    background: linear-gradient(160deg, var(--bg-card), var(--bg-soft));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.75rem 1.75rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .hero p { max-width: 62ch; }
+  .lede { font-size: 1.02rem; color: var(--text-dim); margin-bottom: 0; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1.25rem; }
+  .badge {
+    font: 500 .74rem var(--mono);
+    padding: .22rem .6rem;
+    border-radius: 999px;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .badge.ok { color: var(--ok); border-color: #234a37; background: var(--ok-bg); }
+
+  /* ── Code ────────────────────────────────────────────────────────────── */
+  code {
+    font: .86em/1.5 var(--mono);
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: .12em .38em;
+    color: #d6deeb;
+    overflow-wrap: break-word;
+  }
+  pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    margin: 0 0 1.35rem;
+    max-width: 100%;
+    position: relative;
+  }
+  pre code {
+    background: none; border: 0; padding: 0;
+    font-size: .855rem; line-height: 1.65; color: #d6deeb;
+  }
+  /* Light syntax touches so blocks read without a highlighter. */
+  pre .c { color: var(--text-mute); font-style: italic; }
+  pre .f { color: var(--accent); }
+  pre .s { color: var(--ok); }
+
+  /* ── Tables ──────────────────────────────────────────────────────────── */
+  .table-scroll {
+    overflow-x: auto;
+    margin: 0 0 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { padding: .6rem .85rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+  thead th {
+    background: var(--bg-soft);
+    font: 600 .72rem/1.3 var(--mono);
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: #171c24; }
+  td code { white-space: nowrap; }
+
+  /* ── Callouts ────────────────────────────────────────────────────────── */
+  .callout {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--bg-soft);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: .95rem 1.15rem;
+    margin: 0 0 1.5rem;
+    max-width: var(--measure);
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .label {
+    display: block;
+    font: 600 .7rem/1 var(--mono);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: .5rem;
+  }
+  .callout.warn   { border-left-color: var(--warn);   background: var(--warn-bg);   border-color: #453a1e; }
+  .callout.warn .label { color: var(--warn); }
+  .callout.danger { border-left-color: var(--danger); background: var(--danger-bg); border-color: #472a2b; }
+  .callout.danger .label { color: var(--danger); }
+  .callout.ok     { border-left-color: var(--ok);     background: var(--ok-bg);     border-color: #234a37; }
+  .callout.ok .label { color: var(--ok); }
+
+  /* ── Steps ───────────────────────────────────────────────────────────── */
+  .step {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.35rem;
+    max-width: var(--measure);
+  }
+  .step-num {
+    flex: 0 0 1.75rem; height: 1.75rem;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    color: #fff;
+    font: 600 .8rem var(--mono);
+    margin-top: .15rem;
+  }
+
+  /* ── Card grid (quick start) ─────────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.2rem;
+  }
+  .card h3 { margin: 0 0 .5rem; font-size: 1rem; }
+  .card p  { margin: 0; font-size: .885rem; color: var(--text-dim); }
+  .card p + p { margin-top: .6rem; }
+  .card code { font-size: .82em; }
+
+  /* ── Footer ──────────────────────────────────────────────────────────── */
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: .82rem;
+    color: var(--text-mute);
+  }
+  footer p { max-width: none; margin-bottom: .4rem; }
+
+  /* ── Print ───────────────────────────────────────────────────────────── */
+  @media print {
+    :root { --bg:#fff; --bg-soft:#f6f7f9; --bg-card:#fff; --bg-code:#f4f6f8;
+            --border:#d4d9e0; --text:#16191f; --text-dim:#414852; --text-mute:#6b7280;
+            --accent:#1a5fb4; --accent-dim:#e8f0fb; }
+    body { background: #fff; }
+    .sidebar { display: none; }
+    .wrap { grid-template-columns: 1fr; max-width: none; padding: 0; }
+    a { color: #1a5fb4; }
+    h2 { page-break-after: avoid; }
+    pre, .table-scroll, .callout, .card { page-break-inside: avoid; }
+    thead th { background: #f0f2f5; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ══ Sidebar ══════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">NoteDown</span>
+      <span class="brand-ver">v0.1.0</span>
+    </div>
+    <p class="tagline">Local-first Markdown notes.</p>
+
+    <nav>
+      <div class="nav-group">
+        <div class="nav-label">Overview</div>
+        <ul class="nav-list">
+          <li><a href="#start">Quick start</a></li>
+          <li><a href="#requirements">Requirements</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">Installing</div>
+        <ul class="nav-list">
+          <li><a href="#windows">Windows</a></li>
+          <li><a href="#linux">Linux</a></li>
+          <li><a href="#installer">Making an installer</a></li>
+          <li><a href="#account">Optional: an account</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">Your data</div>
+        <ul class="nav-list">
+          <li><a href="#locations">Where notes live</a></li>
+          <li><a href="#backup">Backing up</a></li>
+          <li><a href="#browser">In the browser</a></li>
+        </ul>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">Security</div>
+        <ul class="nav-list">
+          <li><a href="#boundaries">Trust boundaries</a></li>
+          <li><a href="#authentication">Authentication</a></li>
+          <li><a href="#authorization">Authorization</a></li>
+          <li><a href="#linking">Linking an account</a></li>
+          <li><a href="#validation">Input validation</a></li>
+          <li><a href="#secrets">Secrets</a></li>
+          <li><a href="#notprotected">Not protected</a></li>
+        </ul>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ══ Main ═════════════════════════════════════════════════════════ -->
+  <main>
+
+    <div class="hero">
+      <h1>NoteDown</h1>
+      <p class="lede">
+        A local-first Markdown notes app. Your notes live in a SQLite database on
+        your own machine and the app works completely offline. Signing in to an
+        account is optional and only adds sync between devices.
+      </p>
+      <div class="badges">
+        <span class="badge ok">Windows &amp; Linux</span>
+        <span class="badge">Offline-first</span>
+        <span class="badge">Plain Markdown export</span>
+        <span class="badge">No account required</span>
+      </div>
+    </div>
+
+    <div class="callout ok">
+      <span class="label">Live and verified</span>
+      <p>
+        This page was checked against the running application. The installer path,
+        the toolchain versions and the file locations below all reflect a real
+        build on Windows&nbsp;11.
+      </p>
+    </div>
+
+    <!-- ── Quick start ─────────────────────────────────────────────── -->
+    <h2 id="start">Quick start</h2>
+
+    <h3 id="windows">Windows</h3>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <p><strong>Install the prerequisites.</strong></p>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Tool</th><th>Version</th><th>Install</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="https://nodejs.org">Node.js</a></td>
+            <td><code>20.19+</code></td>
+            <td><code>winget install OpenJS.NodeJS.LTS</code></td>
+          </tr>
+          <tr>
+            <td><a href="https://rustup.rs">Rust</a></td>
+            <td>stable</td>
+            <td><code>winget install Rustlang.Rustup</code></td>
+          </tr>
+          <tr>
+            <td><a href="https://pnpm.io/installation">pnpm</a></td>
+            <td><code>9.x</code></td>
+            <td><code>npm install -g pnpm</code></td>
+          </tr>
+          <tr>
+            <td><a href="https://visualstudio.microsoft.com/downloads/">Visual Studio Build Tools</a></td>
+            <td>2022 or newer, <strong>Desktop development with C++</strong></td>
+            <td>same page, choose the C++ workload</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <p><strong>Build and run.</strong></p>
+      </div>
+    </div>
+
+<pre><code><span class="c"># PowerShell</span>
+<span class="f">git clone</span> https://github.com/d33pstatetech-stack/NoteDown.git
+<span class="f">cd</span> NoteDown
+<span class="f">corepack enable</span>
+<span class="f">pnpm install</span>
+<span class="f">pnpm dev:desktop</span></code></pre>
+
+    <p>
+      The app window opens and you can write notes immediately. No account needed.
+    </p>
+
+    <div class="callout warn">
+      <span class="label">Building in a path with spaces?</span>
+      <p>
+        Windows builds fail with <code>cc1.exe: fatal error</code> and
+        <code>windres: preprocessing failed</code> if the repository sits somewhere
+        like <code>C:\Users\me\My Projects\NoteDown</code>. Either clone to a path
+        without spaces, or set the target directory — see
+        <a href="#troubleshooting">Troubleshooting</a>.
+      </p>
+    </div>
+
+    <h3 id="linux">Linux</h3>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <p><strong>Install system packages.</strong> Pick your distribution:</p>
+      </div>
+    </div>
+
+<pre><code><span class="c"># Debian / Ubuntu</span>
+<span class="f">sudo apt update</span>
+<span class="f">sudo apt install -y</span> curl build-essential file wget \
+  libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+  libssl-dev libxdo-dev libayatana-appindicator3-dev
+
+<span class="c"># Fedora</span>
+<span class="f">sudo dnf install -y</span> curl wget file webkit2gtk4.1-devel \
+  openssl-devel libappindicator-gtk3-devel librsvg2-devel patchelf \
+  libxdo-devel libayatana-appindicator-gtk3-devel
+
+<span class="c"># Arch</span>
+<span class="f">sudo pacman -S --needed</span> curl wget file webkit2gtk-4.1 \
+  base-devel openssl appmenu-gtk-module libappindicator-gtk3 librsvg \
+  patchelf xdo-lib</code></pre>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <p><strong>Install the language toolchains.</strong></p>
+      </div>
+    </div>
+
+<pre><code><span class="f">curl</span> --proto <span class="s">'=https'</span> --tlsv1.2 -sSf https://sh.rustup.rs | <span class="f">sh</span>
+<span class="f">source</span> <span class="s">"$HOME/.cargo/env"</span>
+
+<span class="c"># Node.js 20.19+ via nvm</span>
+<span class="f">curl</span> -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+nvm install 20 &amp;&amp; nvm <span class="f">use</span> 20
+
+<span class="f">npm install</span> -g pnpm@9</code></pre>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <p><strong>Build and run.</strong></p>
+      </div>
+    </div>
+
+<pre><code><span class="f">git clone</span> https://github.com/d33pstatetech-stack/NoteDown.git
+<span class="f">cd</span> NoteDown
+<span class="f">corepack enable</span>
+<span class="f">pnpm install</span>
+<span class="f">pnpm dev:desktop</span></code></pre>
+
+    <!-- ── Requirements ─────────────────────────────────────────────── -->
+    <h2 id="requirements">Requirements</h2>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th></th><th>Windows</th><th>Linux</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Node.js</td><td><code>20.19+</code></td><td><code>20.19+</code></td></tr>
+          <tr><td>pnpm</td><td><code>9.x</code></td><td><code>9.x</code></td></tr>
+          <tr><td>Rust</td><td>stable, MSVC target</td><td>stable, default target</td></tr>
+          <tr>
+            <td>C++ toolchain</td>
+            <td>VS Build Tools 2022, C++ workload</td>
+            <td><code>build-essential</code> + <code>webkit2gtk-4.1</code></td>
+          </tr>
+          <tr>
+            <td>Web view runtime</td>
+            <td>Edge WebView2 — preinstalled on Windows&nbsp;11</td>
+            <td><code>webkit2gtk-4.1</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Verified on Windows&nbsp;11 with Node v25.9.0, pnpm 9.15.9 and Rust 1.99.0.
+    </p>
+
+    <!-- ── Installer ────────────────────────────────────────────────── -->
+    <h2 id="installer">Making an installer</h2>
+
+    <p>Use this when you want a standalone app instead of running from source.</p>
+
+<pre><code><span class="c"># run from source, with hot reload</span>
+<span class="f">pnpm dev:desktop</span>
+
+<span class="c"># produce an installer</span>
+<span class="f">pnpm --filter @localnotes/desktop run build</span></code></pre>
+
+    <p>
+      The installer lands in the Rust target directory, which is under the
+      desktop app's <code>src-tauri</code> folder by default. Both paths are
+      relative to the repository root:
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>OS</th><th>Path</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Windows</td>
+            <td><code>apps\desktop\src-tauri\target\release\bundle\nsis\NoteDown_&lt;version&gt;_x64-setup.exe</code></td>
+          </tr>
+          <tr>
+            <td>Linux</td>
+            <td><code>apps/desktop/src-tauri/target/release/bundle/nsis/NoteDown_&lt;version&gt;_x64-setup.exe</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      If you set <code>CARGO_TARGET_DIR</code>, the output moves there instead —
+      for example <code>C:\nd-target\release\bundle\nsis\</code>.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Windows notes</h3>
+        <p>
+          The installer is an NSIS package — run it and follow the prompts.
+          Microsoft Edge <strong>WebView2</strong> must be installed; it ships with
+          Windows&nbsp;11 and current Windows&nbsp;10. If the app opens to a blank
+          window, install it from
+          <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Microsoft</a>.
+        </p>
+        <p>
+          Windows may warn about an unrecognised publisher. This is expected: the
+          app is not code-signed.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Linux notes</h3>
+        <p>
+          <code>webkit2gtk</code> provides the web view. It is the dependency most
+          likely to be missing if the build fails.
+        </p>
+        <p>
+          To ship <code>.deb</code> or <code>.AppImage</code> instead, add those
+          targets to <code>bundle.targets</code> in
+          <code>apps/desktop/src-tauri/tauri.conf.json</code> — currently
+          <code>["nsis"]</code>. Launchers appear in your application menu after
+          install.
+        </p>
+      </div>
+    </div>
+
+    <!-- ── Account ──────────────────────────────────────────────────── -->
+    <h2 id="account">Optional: connecting an account</h2>
+
+    <p>
+      Sign in from the app to sync notes across devices. Skipping this is fine —
+      the app is fully functional offline and nothing is stored on a server.
+    </p>
+
+    <p>The built app points at the hosted sync service:</p>
+
+<pre><code>https://notedown-api.d33pstatetech.workers.dev</code></pre>
+
+    <p>To build against a different backend, set the URL before building:</p>
+
+<pre><code><span class="c"># Linux / macOS</span>
+VITE_API_URL=https://your-worker.example.workers.dev \
+  <span class="f">pnpm --filter</span> @localnotes/desktop <span class="f">run build</span>
+
+<span class="c"># Windows PowerShell</span>
+<span class="f">$env:VITE_API_URL</span>=<span class="s">"https://your-worker.example.workers.dev"</span>
+<span class="f">pnpm --filter</span> @localnotes/desktop <span class="f">run build</span></code></pre>
+
+    <p>
+      If <code>VITE_API_URL</code> is not set, the app builds and runs in
+      <strong>local-only mode</strong> with sync disabled. That is a supported
+      configuration, not an error.
+    </p>
+
+    <div class="callout">
+      <span class="label">Content Security Policy</span>
+      <p>
+        When you point the app at a different backend, add that origin to the
+        <code>connect-src</code> entry in
+        <code>apps/desktop/src-tauri/tauri.conf.json</code>. The Content Security
+        Policy blocks any origin that is not listed, so a mismatch shows up as
+        the app silently failing to sync.
+      </p>
+    </div>
+
+    <!-- ── Troubleshooting ──────────────────────────────────────────── -->
+    <h2 id="troubleshooting">Troubleshooting</h2>
+
+    <h3><code>pnpm: command not found</code></h3>
+    <p>
+      Install it with <code>npm install -g pnpm@9</code>, or run
+      <code>corepack enable</code> in the repository first.
+    </p>
+
+    <h3>Windows build fails in <code>windres</code> or <code>cc1.exe</code></h3>
+    <p>
+      Both MinGW and MSVC struggle with spaces in paths. Move the repository to a
+      path without spaces, or point the build somewhere clean:
+    </p>
+
+<pre><code><span class="c"># PowerShell</span>
+<span class="f">$env:CARGO_TARGET_DIR</span> = <span class="s">"C:\nd-target"</span>
+<span class="f">pnpm --filter</span> @localnotes/desktop <span class="f">run build</span></code></pre>
+
+    <h3><code>pkg-config</code> could not find <code>webkit2gtk-4.1</code></h3>
+    <p>
+      Install the <code>webkit2gtk</code> development package for your
+      distribution. Tauri&nbsp;2 needs the 4.1 series, not the older
+      <code>webkit2gtk2gtk-4.0</code>.
+    </p>
+
+    <h3><code>error while loading shared libraries</code></h3>
+    <p>
+      The build succeeded but the app will not start — you built against a newer
+      webkit than the system provides at runtime. Install
+      <code>webkit2gtk-4.1</code> as a normal (non-dev) package as well.
+    </p>
+
+    <h3>Blank white window</h3>
+    <p>
+      Almost always a missing WebView2 runtime on Windows. See the WebView2 note
+      above.
+    </p>
+
+    <h3>The first build is slow</h3>
+    <p>
+      Expected. Rust compiles the standard library and the Tauri stack from
+      source on a cold build, which takes several minutes. Later builds are much
+      faster.
+    </p>
+
+    <h3>Sign-in fails but the app otherwise works</h3>
+    <p>
+      Expected when the network is unavailable. Local notes are unaffected and
+      stay on the machine; sync resumes on its own once the connection is back.
+    </p>
+
+    <!-- ── Data locations ───────────────────────────────────────────── -->
+    <h2 id="locations">Where your notes are stored</h2>
+
+    <p>
+      Notes are a plain SQLite database in your user data directory. Copy that
+      directory to back everything up.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>OS</th><th>Location</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Windows</td>
+            <td><code>%APPDATA%\com.notedown.app\</code></td>
+          </tr>
+          <tr>
+            <td>Linux</td>
+            <td><code>~/.local/share/com.notedown.app/</code><br>
+                (or <code>$XDG_DATA_HOME/com.notedown.app/</code>)</td>
+          </tr>
+          <tr>
+            <td>macOS</td>
+            <td><code>~/Library/Application Support/com.notedown.app/</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Inside that directory:</p>
+    <ul>
+      <li><code>notes.sqlite3</code> — notebooks, folders, notes, attachments, the sync queue, tombstones and checkpoint.</li>
+      <li><code>notes.sqlite3-wal</code> / <code>notes.sqlite3-shm</code> — write-ahead log. Copy them together with the database.</li>
+      <li><code>attachments/</code> — image bytes, named by stable attachment UUID.</li>
+    </ul>
+
+    <p>
+      SQLite runs with <code>journal_mode = WAL</code>,
+      <code>foreign_keys = ON</code>, <code>synchronous = NORMAL</code> and
+      <code>busy_timeout = 5000</code>. Migrations are explicit, versioned and
+      applied on startup; the applied version is stored in the
+      <code>schema_migrations</code> table.
+    </p>
+
+    <h2 id="backup">Backing up</h2>
+
+    <p><strong>Simplest:</strong> quit the app, then copy the whole
+      <code>com.notedown.app</code> directory. Restoring is copying it back.</p>
+
+    <p><strong>Live backup</strong> without quitting:</p>
+
+<pre><code>sqlite3 notes.sqlite3 <span class="s">"VACUUM INTO 'backup.sqlite3'"</span></code></pre>
+
+    <div class="callout ok">
+      <span class="label">Most portable</span>
+      <p>
+        The in-app <strong>Export</strong> button produces a ZIP of plain Markdown
+        files. That format needs no SQLite at all, and the desktop app can read
+        it back.
+      </p>
+    </div>
+
+    <h2 id="browser">In the browser</h2>
+
+    <p>
+      Everything lives in IndexedDB under the origin you loaded the app from
+      (the <code>localnotes</code> database, with the <code>nodes</code>,
+      <code>attachments</code>, <code>queue</code> and <code>meta</code> stores).
+    </p>
+
+    <div class="callout warn">
+      <span class="label">IndexedDB is not a guaranteed filesystem</span>
+      <p>
+        Storage may be evicted under pressure, is cleared by “clear site data”
+        and private browsing, and is not restored by uninstalling the browser.
+      </p>
+    </div>
+
+    <ul>
+      <li>
+        The app requests persistent storage
+        (<code>navigator.storage.persist()</code>), reports the result in
+        <strong>Settings → Storage</strong>, and shows a persistent warning when
+        the origin is <em>best-effort</em> rather than <em>persistent</em>.
+      </li>
+      <li>
+        Per-origin allowance, eviction policy and “persistent” behaviour differ
+        by browser and change over time, so the in-app status panel reads the
+        real values from <code>navigator.storage.estimate()</code> instead of
+        hard-coding them.
+      </li>
+      <li>
+        <strong>Export regularly.</strong> Export → ZIP is the only browser backup
+        that survives clearing site data.
+      </li>
+    </ul>
+
+    <!-- ── Security ─────────────────────────────────────────────────── -->
+    <h2 id="security">Security</h2>
+
+    <h3 id="boundaries">Trust boundaries</h3>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Boundary</th><th>Assumption</th><th>Control</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Browser ↔ Worker</td>
+            <td>Network is hostile</td>
+            <td>
+              HTTPS only. Restrictive CORS —
+              <code>Access-Control-Allow-Origin</code> is exactly the app origin,
+              no wildcard — and CSRF-protected state-changing routes.
+            </td>
+          </tr>
+          <tr>
+            <td>Desktop ↔ Worker</td>
+            <td>Same, plus no cookie jar</td>
+            <td>
+              Better Auth <strong>bearer</strong> plugin. The session token is read
+              from <code>set-auth-token</code>, kept in OS-protected storage by
+              the Rust core, and sent as <code>Authorization: Bearer</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>Worker ↔ D1 / R2</td>
+            <td>Trusted</td>
+            <td>
+              Bindings only. No Cloudflare API token in any client and no
+              credentials in the repository.
+            </td>
+          </tr>
+          <tr>
+            <td>Client → client</td>
+            <td>Never trusted</td>
+            <td>
+              Ownership is enforced in SQL (<code>WHERE user_id = ?</code>) from
+              the <em>verified session</em>. Ids in request bodies are ignored.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="label">Why the browser uses a bearer token too</span>
+      <p>
+        The hosted web app and the Worker are different sites. A
+        <code>SameSite=Lax</code> session cookie would be withheld by the browser
+        on cross-site requests, so sign-in would appear to succeed while every
+        later request stayed anonymous. Both clients therefore send an explicit
+        bearer token: the desktop through the Rust core, the browser from
+        <code>localStorage</code>.
+      </p>
+    </div>
+
+    <h3 id="authentication">Authentication</h3>
+    <ul>
+      <li>
+        Better Auth with the D1 binding (<code>database: env.DB</code>). No
+        hand-rolled password hashing, session tokens or crypto.
+      </li>
+      <li>
+        Passwords are hashed by the library (scrypt/argon2 per its own defaults),
+        never logged and never stored by NoteDown.
+      </li>
+      <li>
+        Email verification and password reset need an email transport, which is
+        an external service. Until one is configured the app runs without email
+        verification for the single-user case, and the UI says so.
+      </li>
+      <li>
+        Sessions are server-side rows in D1; signing out deletes the row. On
+        startup the app calls <code>GET /api/me</code> — a <code>401</code> only
+        downgrades it to offline mode, never an error state.
+      </li>
+    </ul>
+
+    <h3 id="authorization">Authorization</h3>
+    <ul>
+      <li>Every <code>/api/*</code> route resolves the user from the session before touching data.</li>
+      <li>
+        Cross-user access is prevented by scoping every read and write by
+        <code>user_id</code>, and by returning <code>404</code> rather than
+        <code>403</code> for another user's id, so ids are not enumerable.
+      </li>
+      <li>
+        <strong>Tested:</strong> cross-user notes, attachments and tombstones
+        return <code>404</code>; an unauthenticated request returns
+        <code>401</code>; a forged <code>user_id</code> in the body is ignored.
+      </li>
+      <li>
+        Attachment downloads are authorized the same way. R2 buckets are private:
+        no public bucket URL and no <code>r2.dev</code> public access.
+      </li>
+    </ul>
+
+    <h3 id="linking">Attaching local data to an account</h3>
+    <p>
+      An existing local database is <strong>never</strong> silently bound to
+      whichever account signs in. The app records a <code>localOwnerId</code>
+      once linked; if a different account signs in it refuses to sync and offers
+      <strong>Link account</strong>, <strong>Export</strong> or
+      <strong>Import</strong>. Unlinking is explicit and requires typing the
+      account email to confirm.
+    </p>
+
+    <h3 id="validation">Input validation</h3>
+    <ul>
+      <li>
+        Attachment MIME type is sniffed from the bytes, not taken from the
+        client's <code>Content-Type</code>, and the extension is derived from the
+        sniffed type against an image allow-list.
+      </li>
+      <li>Limits: 5&nbsp;MiB per attachment and 2&nbsp;MiB of Markdown per note; <code>sha256</code> is verified on commit.</li>
+      <li>Filenames from a client are used for display only, never to build a filesystem path.</li>
+      <li>
+        Import rejects any archive entry that is absolute, has a drive letter,
+        contains <code>..</code>, backslashes, NUL or a symlink, or exceeds
+        limits.
+      </li>
+    </ul>
+
+    <h3 id="secrets">Secrets</h3>
+    <ul>
+      <li>No real credentials in the repository; <code>.env.example</code> holds placeholders only.</li>
+      <li>
+        Cloudflare secrets are set with <code>wrangler secret put &lt;NAME&gt;</code>.
+        Account and database ids live in <code>wrangler.jsonc</code> — they are
+        identifiers, not secrets — but <code>.env</code> is git-ignored regardless.
+      </li>
+      <li>
+        Better Auth's secret must be at least 32 random bytes. Rotating it
+        invalidates existing sessions, which is the documented recovery path if
+        it ever leaks.
+      </li>
+    </ul>
+
+    <h3 id="notprotected">What is <em>not</em> protected yet</h3>
+
+    <div class="callout danger">
+      <span class="label">Know these limits</span>
+      <ul style="margin-bottom:0">
+        <li>
+          <strong>No end-to-end encryption.</strong> The server can read note
+          content — required for server-side export and validation. Encryption at
+          rest is R2's and D1's, not NoteDown's.
+        </li>
+        <li>No per-note sharing, no public links, no audit log.</li>
+        <li>
+          <strong>Local data at rest is not encrypted.</strong> Anyone with
+          filesystem access to your machine or browser profile can read your
+          notes. Full-disk encryption is the mitigation.
+        </li>
+      </ul>
+    </div>
+
+    <footer>
+      <p>
+        Merged from <code>docs/INSTALL.md</code>,
+        <code>docs/DATA-LOCATIONS.md</code> and <code>docs/SECURITY.md</code> —
+        those files remain the source of truth.
+      </p>
+      <p>
+        <a href="https://github.com/d33pstatetech-stack/NoteDown">github.com/d33pstatetech-stack/NoteDown</a>
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  // Highlight the current section in the sidebar as you scroll.
+  (function () {
+    var links = Array.prototype.slice.call(
+      document.querySelectorAll('.nav-list a[href^="#"]')
+    );
+    var byId = {};
+    var targets = [];
+    links.forEach(function (a) {
+      var el = document.querySelector(a.getAttribute('href'));
+      if (el) { byId[el.id] = a; targets.push(el); }
+    });
+    if (!targets.length) return;
+
+    function update() {
+      var best = null;
+      var line = window.scrollY + 90;
+      targets.forEach(function (el) {
+        if (el.offsetTop <= line) best = el;
+      });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (best && byId[best.id]) byId[best.id].classList.add('active');
+    }
+
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>
