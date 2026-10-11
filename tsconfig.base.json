@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": true,
+    "paths": {
+      "@localnotes/shared": [
+        "./packages/shared/src/index.ts"
+      ],
+      "@localnotes/markdown": [
+        "./packages/markdown/src/index.ts"
+      ],
+      "@localnotes/storage": [
+        "./packages/storage/src/index.ts"
+      ],
+      "@localnotes/sync": [
+        "./packages/sync/src/index.ts"
+      ],
+      "@localnotes/editor": [
+        "./packages/editor/src/index.ts"
+      ],
+      "@localnotes/ui": [
+        "./packages/ui/src/index.ts"
+      ]
+    }
+  }
+}

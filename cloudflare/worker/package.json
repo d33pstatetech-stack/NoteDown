@@ -1,0 +1,26 @@
+{
+  "name": "@localnotes/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply localnotes --local",
+    "migrate:remote": "wrangler d1 migrations apply localnotes --remote",
+    "test": "vitest run -c vitest.config.ts",
+    "test:watch": "vitest -c vitest.config.ts"
+  },
+  "dependencies": {
+    "@localnotes/shared": "workspace:*",
+    "better-auth": "^1.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.12.21",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.100.0",
+    "vitest": "^2.1.8"
+  }
+}

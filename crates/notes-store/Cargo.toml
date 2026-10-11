@@ -1,0 +1,26 @@
+[package]
+name = "notes-store"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+description = "Narrow SQLite storage core for the Local-First Markdown Notes desktop app"
+license = "MIT"
+
+[lib]
+name = "notes_store"
+path = "src/lib.rs"
+
+[dependencies]
+# Bundled SQLite: no system libsqlite3 required, and the version is pinned with
+# the app instead of depending on the host distribution.
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+sha2 = "0.10"
+
+[dev-dependencies]
+# No extra test dependencies: temporary directories are created with std.
+# `sha2` and `base64` are re-used directly from the tests.
+sha2 = "0.10"
+base64 = "0.22"

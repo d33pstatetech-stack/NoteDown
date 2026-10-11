@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Workers globals (D1Database, R2Bucket, ExportedHandler) and no DOM.
+    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2022"],
+    // Better Auth 1.7 publishes option types whose optional properties do not
+    // accept an explicit `undefined`, which `exactOptionalPropertyTypes: true`
+    // rejects from inside the library's own generics. Relaxed for this package
+    // only; every other package keeps the stricter setting.
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["src", "../../types/test-env.d.ts"]
+}

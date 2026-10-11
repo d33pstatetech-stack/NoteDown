@@ -1,0 +1,48 @@
+{
+  // Deploy configuration for the Local-First Notes API.
+  // See cloudflare/README.md for the full setup order.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "localnotes-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    // Public identifiers only. Anything secret is a `wrangler secret`.
+    "APP_ORIGIN": "http://localhost:3000"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "localnotes",
+      "database_id": "<set-with-wrangler-d1-create>",
+      "migrations_dir": "../migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "localnotes-files"
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "localnotes-api",
+      "vars": {
+        "APP_ORIGIN": "https://notes.example.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "localnotes-prod",
+          "database_id": "<set-with-wrangler-d1-create>",
+          "migrations_dir": "../migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "FILES", "bucket_name": "localnotes-files-prod" }]
+    }
+  }
+}

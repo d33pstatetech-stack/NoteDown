@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Everything the desktop app needs: the core APIs and the file dialog used to pick where an exported archive is written. Notes themselves are read and written by the Rust core, never by frontend filesystem calls.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
+}
